@@ -39,7 +39,7 @@ func New() *EWeb {
 	return web
 }
 
-func GetVersion() stirng {
+func GetVersion() string {
 	return "0.0.1"
 }
 

@@ -35,9 +35,9 @@ func (ctx *Context) Get(key string) interface{} {
 	return nil
 }
 
-//跳转
-func (ctx *Context) Redirect(path string) {
-
+//跳转 跳转后面的代码依然会继续执行 不想执行请return
+func (ctx *Context) Redirect(path string, code int) {
+	http.Redirect(ctx.Writer, ctx.Request, path, code)
 }
 
 //类似php $_GET

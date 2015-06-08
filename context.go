@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -71,23 +70,18 @@ func (ctx *Context) String(format string, a ...interface{}) {
 func (ctx *Context) Html(path string, data interface{}) {
 	path = ctx.Ins.TemplateDir + "/" + path
 	t, err := template.ParseFiles(path)
-	if err != nil {
-		ctx.Writer.WriteHeader(500)
-		log.Println(err.Error())
-		return
+	if err == nil {
+		err = t.Execute(ctx.Writer, data)
+		if err == nil {
+			return
+		}
 	}
-	err = t.Execute(ctx.Writer, data)
-	if err != nil {
-		ctx.Writer.WriteHeader(500)
-		log.Println(err.Error())
-	}
+	ctx.Writer.Write([]byte(err.Error()))
 }
 func (ctx *Context) Json(data interface{}) {
 	val, err := json.Marshal(data)
 	if err != nil {
-		val = []byte("{}")
-		log.Println(err.Error())
-		return
+		val = []byte(err.Error())
 	}
 	ctx.Writer.Write(val)
 }

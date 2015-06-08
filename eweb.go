@@ -26,8 +26,9 @@ type EWeb struct {
 	StaticDir map[string]string
 	//基础路径 目前还没实现 后期实现在公开
 	//模板路径
-	TemplateDir string
-	basePath    string
+	TemplateDir       string
+	basePath          string
+	notFoundHandlFunc func(*Context)
 }
 
 func New() *EWeb {
@@ -146,7 +147,7 @@ func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	http.NotFound(w, r)
+	e.NotFound(ctx)
 }
 
 func (e *EWeb) Register(cs ...Controller) {
@@ -184,6 +185,19 @@ func (e *EWeb) Register(cs ...Controller) {
 	}
 }
 
+//设置404处理函数
+func (e *EWeb) SetNotFound(handler func(*Context)) {
+	e.notFoundHandlFunc = handler
+}
+
+func (e *EWeb) NotFound(ctx *Context) {
+	if e.notFoundHandlFunc != nil {
+		ctx.Writer.WriteHeader(404)
+		e.notFoundHandlFunc(ctx)
+	} else {
+		http.NotFound(ctx.Writer, ctx.Request)
+	}
+}
 func (e *EWeb) Run(addr string) {
 	http.ListenAndServe(addr, e)
 }

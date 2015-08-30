@@ -64,10 +64,19 @@ func (ctx *Context) ClientIP() string {
 }
 
 //渲染相关
-func (ctx *Context) String(format string, a ...interface{}) {
-	ctx.Writer.Write([]byte(fmt.Sprintf(format, a...)))
+func (ctx *Context) render(code int, val []byte) {
+	ctx.Writer.WriteHeader(code)
+	_, err := ctx.Writer.Write(val)
+	if err != nil {
+		ctx.Writer.WriteHeader(500)
+	}
 }
-func (ctx *Context) Html(path string, data interface{}) {
+
+func (ctx *Context) String(code int, format string, a ...interface{}) {
+	ctx.render(code, []byte(fmt.Sprintf(format, a...)))
+}
+
+func (ctx *Context) Html(code int, path string, data interface{}) {
 	path = ctx.Ins.TemplateDir + "/" + path
 	t, err := template.ParseFiles(path)
 	if err == nil {
@@ -78,10 +87,11 @@ func (ctx *Context) Html(path string, data interface{}) {
 	}
 	ctx.Writer.Write([]byte(err.Error()))
 }
-func (ctx *Context) Json(data interface{}) {
+
+func (ctx *Context) Json(code int, data interface{}) {
 	val, err := json.Marshal(data)
 	if err != nil {
 		val = []byte(err.Error())
 	}
-	ctx.Writer.Write(val)
+	ctx.render(code, val)
 }

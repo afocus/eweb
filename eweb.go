@@ -24,11 +24,13 @@ type EWeb struct {
 	routers map[string]routerMaps
 	//静态文件路径
 	StaticDir map[string]string
-	//基础路径 目前还没实现 后期实现在公开
 	//模板路径
-	TemplateDir       string
+	TemplateDir string
+	//基础路径 目前还没实现 后期实现在公开
 	basePath          string
 	notFoundHandlFunc func(*Context)
+	//默认控制器名称
+	DefaultControlName string
 }
 
 func New() *EWeb {
@@ -37,11 +39,12 @@ func New() *EWeb {
 	web.StaticDir = make(map[string]string, 0)
 	web.basePath = "/"
 	web.TemplateDir = "./view"
+	web.DefaultControlName = "index"
 	return web
 }
 
 func GetVersion() string {
-	return "0.0.1"
+	return "0.0.2"
 }
 
 //处理静态文件
@@ -95,7 +98,7 @@ func cleanPath(path string) string {
 func (e *EWeb) parseUrl(url string) (controlName, path string) {
 	p := cleanPath(url[len(e.basePath):])
 	paths := strings.Split(p, "/")
-	controlName = "index"
+	controlName = e.DefaultControlName
 	if len(paths) >= 2 && paths[1] != "" {
 		controlName = paths[1]
 	}
@@ -105,6 +108,14 @@ func (e *EWeb) parseUrl(url string) (controlName, path string) {
 
 //http handler
 func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	//捕获异常进行崩溃恢复
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("panic >>>>> HTTP 500 ", err)
+			http.Error(w, "HTTP 500", 500)
+		}
+	}()
+
 	path := strings.ToLower(r.URL.Path)
 	log.Printf("[%s] %s\r\n", r.Method, path)
 	if e.staticFile(path, w, r) {
@@ -165,7 +176,7 @@ func (e *EWeb) Register(cs ...Controller) {
 			List:    make(map[string]routerMapStruct, 0),
 		}
 		for _, r := range c.GetRouter() {
-			log.Println("router>>", cname, r.Path)
+			fmt.Println("router>>", cname, r.Path)
 			comstr := `([^/^\s.]+)`
 			x := regexp.MustCompile(fmt.Sprintf("/:%s", comstr))
 			params := x.FindAllString(r.Path, -1)
@@ -199,5 +210,9 @@ func (e *EWeb) NotFound(ctx *Context) {
 	}
 }
 func (e *EWeb) Run(addr string) {
-	http.ListenAndServe(addr, e)
+	fmt.Println("---> run at " + addr)
+	err := http.ListenAndServe(addr, e)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
 }

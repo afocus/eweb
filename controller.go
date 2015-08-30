@@ -1,3 +1,6 @@
+/*
+定义一个基础的control实现controller接口 以后所有的控制器可以继承此control
+*/
 package eweb
 
 type Controller interface {

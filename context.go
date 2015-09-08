@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+const (
+	CONTENTTYPE_TEXT = "text/plain"
+	CONTENTTYPE_JSON = "application/json"
+	CONTENTTYPE_XML  = "application/xml"
+)
+
 type Context struct {
 	Writer  http.ResponseWriter
 	Request *http.Request
@@ -17,6 +23,7 @@ type Context struct {
 	Ins     *EWeb
 }
 
+// 获取url router 绑定的类似:xxx中xxx的具体值
 func (ctx *Context) Param(key string) string {
 	if val, has := ctx.Params[key]; has {
 		return val
@@ -24,16 +31,32 @@ func (ctx *Context) Param(key string) string {
 	return ""
 }
 
-//优先url的参数 返回字符串
-//如果具体的值是字符串数组 请使用ctx.request.url.query()[key]类似的方式
-func (ctx *Context) Query(key string) string {
-	if val := ctx.Request.URL.Query().Get(key); val != "" {
-		return val
+// ctx.Request.URL.Query().Get(key[0])的快捷方式
+// key[1] 当key[0]不存在时的默认值
+func (ctx *Context) Query(key ...string) string {
+	val := ctx.Request.URL.Query().Get(key[0])
+	if len(key) > 1 && len(val) == 0 {
+		val = key[1]
 	}
-	if ctx.Request.Form == nil {
-		ctx.Request.ParseForm()
+	return val
+}
+
+//同上
+func (ctx *Context) PostForm(key ...string) string {
+	ctx.Request.ParseMultipartForm(32 << 20) //最大post数据的大小 32mb
+	if values := ctx.Request.PostForm[key[0]]; len(values) > 0 {
+		return values[0]
 	}
-	return ctx.Request.Form.Get(key)
+	if ctx.Request.MultipartForm != nil && ctx.Request.MultipartForm.File != nil {
+		if values := ctx.Request.MultipartForm.Value[key[0]]; len(values) > 0 {
+			return values[0]
+		}
+	}
+	if len(key) == 1 {
+		return ""
+	} else {
+		return key[1]
+	}
 }
 
 //设置共享数据 请勿在control结构体里定义属性并且修改它 如果要共享数据请使用ctx.set/get
@@ -68,10 +91,12 @@ func (ctx *Context) ClientIP() string {
 	return strings.TrimSpace(ctx.Request.RemoteAddr)
 }
 
+//判断是否ajax请求
 func (ctx *Context) IsAjax() bool {
 	return ctx.Request.Header.Get("X-Requested-With") == "XMLHttpRequest"
 }
 
+//判断是否是上传
 func (ctx *Context) IsUpload() bool {
 	return ctx.Request.Header.Get("Content-Type") == "multipart/form-data"
 }
@@ -87,7 +112,7 @@ func (ctx *Context) Render(val []byte, code int, typestr string) {
 }
 
 func (ctx *Context) String(code int, format string, a ...interface{}) {
-	ctx.Render([]byte(fmt.Sprintf(format, a...)), code, "text/plain")
+	ctx.Render([]byte(fmt.Sprintf(format, a...)), code, CONTENTTYPE_TEXT)
 }
 
 func (ctx *Context) Html(code int, path string, data interface{}) {
@@ -105,19 +130,19 @@ func (ctx *Context) Html(code int, path string, data interface{}) {
 func (ctx *Context) Json(code int, data interface{}) {
 	val, err := json.Marshal(data)
 	if err != nil {
-		ctx.Render([]byte(err.Error()), http.StatusOK, "text/plain")
+		ctx.Render([]byte(err.Error()), http.StatusOK, CONTENTTYPE_TEXT)
 		return
 	}
-	ctx.Render(val, code, "application/json")
+	ctx.Render(val, code, CONTENTTYPE_JSON)
 }
 
 func (ctx *Context) Xml(code int, data interface{}) {
 	val, err := xml.Marshal(data)
 	if err != nil {
-		ctx.Render([]byte(err.Error()), http.StatusOK, "text/plain")
+		ctx.Render([]byte(err.Error()), http.StatusOK, CONTENTTYPE_TEXT)
 		return
 	}
 	//xml默认不添加头部 这里补上
 	xmls := []byte(xml.Header)
-	ctx.Render(append(xmls, val...), code, "application/xml")
+	ctx.Render(append(xmls, val...), code, CONTENTTYPE_XML)
 }

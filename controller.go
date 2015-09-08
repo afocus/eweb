@@ -13,7 +13,7 @@ type Controller interface {
 type ControlRouter struct {
 	Mehod  string
 	Path   string
-	Action func(*Context)
+	Action ActionFunc
 }
 
 type Control struct {

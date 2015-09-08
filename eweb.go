@@ -9,10 +9,11 @@ import (
 	"strings"
 )
 
+type ActionFunc func(*Context)
 type routerMapStruct struct {
 	Params []string
 	Method string
-	Action func(*Context)
+	Action ActionFunc
 }
 type routerMaps struct {
 	Control Controller
@@ -28,7 +29,7 @@ type EWeb struct {
 	TemplateDir string
 	//基础路径 目前还没实现 后期实现在公开
 	basePath          string
-	notFoundHandlFunc func(*Context)
+	notFoundHandlFunc ActionFunc
 	//默认控制器名称
 	DefaultControlName string
 }
@@ -197,7 +198,7 @@ func (e *EWeb) Register(cs ...Controller) {
 }
 
 //设置404处理函数
-func (e *EWeb) SetNotFound(handler func(*Context)) {
+func (e *EWeb) SetNotFound(handler ActionFunc) {
 	e.notFoundHandlFunc = handler
 }
 

@@ -31,7 +31,7 @@ type Index struct{
 }
 //返回路由信息
 //GET/POST/DELETE/PUT/.../*   `*`代表匹配所有
-func (this Index) GetRouter()[]eweb.ControlRouter{
+func (this *Index) GetRouter()[]eweb.ControlRouter{
 	return []eweb.ControlRouter{
 		{"GET","/",this.Index},
 		{"*","/:name/say",this.Say},
@@ -45,7 +45,7 @@ func (Index) Index(ctx *eweb.Context){
 func (Index) Say(ctx *eweb.Context){
 	//得到路由里 /:name/say 里面的name
 	name:= ctx.Param("name")
-	ctx.JSON(200,map[string]interface{}{
+	ctx.Json(200,map[string]interface{}{
 		"name":name,
 		"code":0,
 	})

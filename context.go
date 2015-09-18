@@ -1,26 +1,19 @@
 package eweb
 
 import (
-	"encoding/json"
-	"encoding/xml"
 	"fmt"
-	"html/template"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
-const (
-	CONTENTTYPE_TEXT = "text/plain"
-	CONTENTTYPE_JSON = "application/json"
-	CONTENTTYPE_XML  = "application/xml"
-)
-
 type Context struct {
-	Writer  http.ResponseWriter
-	Request *http.Request
-	Params  map[string]string
-	Data    map[string]interface{}
-	Ins     *EWeb
+	Writer      http.ResponseWriter
+	Request     *http.Request
+	Params      map[string]string
+	Data        map[string]interface{}
+	Ins         *EWeb
+	ControlName string
 }
 
 // 获取url router 绑定的类似:xxx中xxx的具体值
@@ -39,6 +32,10 @@ func (ctx *Context) Query(key ...string) string {
 		val = key[1]
 	}
 	return val
+}
+func (ctx *Context) QueryInt(key ...string) int {
+	n, _ := strconv.Atoi(ctx.Query(key...))
+	return n
 }
 
 //同上
@@ -101,48 +98,22 @@ func (ctx *Context) IsUpload() bool {
 	return ctx.Request.Header.Get("Content-Type") == "multipart/form-data"
 }
 
-//渲染相关
-func (ctx *Context) Render(val []byte, code int, typestr string) {
-	ctx.Writer.WriteHeader(code)
-	ctx.Writer.Header().Set("Content-Type", typestr)
-	_, err := ctx.Writer.Write(val)
-	if err != nil {
-		http.Error(ctx.Writer, err.Error(), http.StatusInternalServerError)
-	}
-}
-
 func (ctx *Context) String(code int, format string, a ...interface{}) {
-	ctx.Render([]byte(fmt.Sprintf(format, a...)), code, CONTENTTYPE_TEXT)
+	err := ctx.Ins.render.Render(ctx.Writer, "", code, []byte(fmt.Sprintf(format, a...)))
+	panic(err)
 }
 
-func (ctx *Context) Html(code int, path string, data interface{}) {
-	path = ctx.Ins.TemplateDir + "/" + path
-	t, err := template.ParseFiles(path)
-	if err == nil {
-		err = t.Execute(ctx.Writer, data)
-		if err == nil {
-			return
-		}
-	}
-	ctx.Writer.Write([]byte(err.Error()))
+func (ctx *Context) Html(code int, tplname string, data interface{}) {
+	err := ctx.Ins.render.Html(ctx.Writer, code, tplname, data, ctx.ControlName)
+	panic(err)
 }
 
 func (ctx *Context) Json(code int, data interface{}) {
-	val, err := json.Marshal(data)
-	if err != nil {
-		ctx.Render([]byte(err.Error()), http.StatusOK, CONTENTTYPE_TEXT)
-		return
-	}
-	ctx.Render(val, code, CONTENTTYPE_JSON)
+	err := ctx.Ins.render.Json(ctx.Writer, code, data)
+	panic(err)
 }
 
 func (ctx *Context) Xml(code int, data interface{}) {
-	val, err := xml.Marshal(data)
-	if err != nil {
-		ctx.Render([]byte(err.Error()), http.StatusOK, CONTENTTYPE_TEXT)
-		return
-	}
-	//xml默认不添加头部 这里补上
-	xmls := []byte(xml.Header)
-	ctx.Render(append(xmls, val...), code, CONTENTTYPE_XML)
+	err := ctx.Ins.render.Xml(ctx.Writer, code, data)
+	panic(err)
 }

@@ -2,6 +2,8 @@ package eweb
 
 import (
 	"fmt"
+	"github.com/afocus/eweb/render"
+	"html/template"
 	"log"
 	"net/http"
 	"reflect"
@@ -25,27 +27,34 @@ type EWeb struct {
 	routers map[string]routerMaps
 	//静态文件路径
 	StaticDir map[string]string
-	//模板路径
-	TemplateDir string
 	//基础路径 目前还没实现 后期实现在公开
 	basePath          string
 	notFoundHandlFunc ActionFunc
 	//默认控制器名称
 	DefaultControlName string
+	//
+	render *render.Render
+	debug  bool
 }
 
-func New() *EWeb {
+func New(enableDebug bool) *EWeb {
 	web := new(EWeb)
-	web.routers = make(map[string]routerMaps)
-	web.StaticDir = make(map[string]string, 0)
+	web.routers = make(map[string]routerMaps, 0)
+	web.StaticDir = map[string]string{
+		"/static": "static/",
+	}
 	web.basePath = "/"
-	web.TemplateDir = "./view"
 	web.DefaultControlName = "index"
+	web.render = render.New("views/", enableDebug)
+	web.debug = enableDebug
 	return web
 }
 
 func GetVersion() string {
-	return "0.0.2"
+	return "0.0.3"
+}
+func (e *EWeb) RegisterTplFuncs(funcs template.FuncMap) {
+	e.render.RegisterFuncs(funcs)
 }
 
 //处理静态文件
@@ -55,6 +64,7 @@ func (e *EWeb) staticFile(path string, w http.ResponseWriter, r *http.Request) b
 		return true
 	} else {
 		for prefix, staticDir := range e.StaticDir {
+			fmt.Println(prefix, path)
 			if strings.HasPrefix(path, prefix) {
 				file := staticDir + path[len(prefix):]
 				http.ServeFile(w, r, file)
@@ -112,8 +122,10 @@ func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//捕获异常进行崩溃恢复
 	defer func() {
 		if err := recover(); err != nil {
-			log.Println("panic >>>>> HTTP 500 ", err)
-			http.Error(w, "HTTP 500", 500)
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.WriteHeader(500)
+			fmt.Fprintln(w, fmt.Sprintf("<pre style='color:red;font-weight:bold'>%v</pre>", err))
 		}
 	}()
 
@@ -122,14 +134,15 @@ func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if e.staticFile(path, w, r) {
 		return
 	}
-	ctx := &Context{
-		Writer:  w,
-		Request: r,
-		Params:  make(map[string]string),
-		Data:    make(map[string]interface{}),
-		Ins:     e,
-	}
 	cname, uripath := e.parseUrl(path)
+	ctx := &Context{
+		Writer:      w,
+		Request:     r,
+		Params:      make(map[string]string),
+		Data:        make(map[string]interface{}),
+		Ins:         e,
+		ControlName: cname,
+	}
 	if comap, has := e.routers[cname]; has {
 		if co, has := comap.List[uripath]; has {
 			//普通匹配
@@ -172,10 +185,12 @@ func (e *EWeb) Register(cs ...Controller) {
 		if _, has := e.routers[cname]; has {
 			panic("controlName:" + cname + " alreay registed")
 		}
+
 		e.routers[cname] = routerMaps{
 			Control: c,
 			List:    make(map[string]routerMapStruct, 0),
 		}
+
 		for _, r := range c.GetRouter() {
 			fmt.Println("router>>", cname, r.Path)
 			comstr := `([^/^\s.]+)`
@@ -210,10 +225,15 @@ func (e *EWeb) NotFound(ctx *Context) {
 		http.NotFound(ctx.Writer, ctx.Request)
 	}
 }
+
 func (e *EWeb) Run(addr string) {
 	fmt.Println("---> run at " + addr)
 	err := http.ListenAndServe(addr, e)
 	if err != nil {
 		fmt.Println(err.Error())
 	}
+}
+
+func (e *EWeb) SetDebug(enable bool) {
+	e.debug = enable
 }

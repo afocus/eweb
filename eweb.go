@@ -12,6 +12,7 @@ import (
 )
 
 type ActionFunc func(*Context)
+
 type routerMapStruct struct {
 	Params []string
 	Method string
@@ -129,12 +130,11 @@ func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	path := strings.ToLower(r.URL.Path)
-	log.Printf("[%s] %s\r\n", r.Method, path)
-	if e.staticFile(path, w, r) {
+	if e.staticFile(r.URL.Path, w, r) {
 		return
 	}
-	cname, uripath := e.parseUrl(path)
+	log.Printf("[%s] %s\r\n", r.Method, r.URL.Path)
+	cname, uripath := e.parseUrl(r.URL.Path)
 	ctx := &Context{
 		Writer:      w,
 		Request:     r,
@@ -236,4 +236,10 @@ func (e *EWeb) Run(addr string) {
 
 func (e *EWeb) SetDebug(enable bool) {
 	e.debug = enable
+}
+
+type D struct {
+	Message string
+	Status  int
+	Data    interface{}
 }

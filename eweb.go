@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/afocus/eweb/render"
 	"html/template"
-	"log"
 	"net/http"
 	"reflect"
 	"regexp"
@@ -52,7 +51,7 @@ func New(enableDebug bool) *EWeb {
 }
 
 func GetVersion() string {
-	return "0.0.3"
+	return "0.0.4"
 }
 func (e *EWeb) RegisterTplFuncs(funcs template.FuncMap) {
 	e.render.RegisterFuncs(funcs)
@@ -65,7 +64,6 @@ func (e *EWeb) staticFile(path string, w http.ResponseWriter, r *http.Request) b
 		return true
 	} else {
 		for prefix, staticDir := range e.StaticDir {
-			fmt.Println(prefix, path)
 			if strings.HasPrefix(path, prefix) {
 				file := staticDir + path[len(prefix):]
 				http.ServeFile(w, r, file)
@@ -126,6 +124,7 @@ func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 			w.WriteHeader(500)
+			LogError("%v", err)
 			fmt.Fprintln(w, fmt.Sprintf("<pre style='color:red;font-weight:bold'>%v</pre>", err))
 		}
 	}()
@@ -133,7 +132,7 @@ func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if e.staticFile(r.URL.Path, w, r) {
 		return
 	}
-	log.Printf("[%s] %s\r\n", r.Method, r.URL.Path)
+	LogInfo("request [%s] %s\r\n", r.Method, r.URL.Path)
 	cname, uripath := e.parseUrl(r.URL.Path)
 	ctx := &Context{
 		Writer:      w,
@@ -183,6 +182,7 @@ func (e *EWeb) Register(cs ...Controller) {
 			cname = strings.ToLower(type_.Elem().Name())
 		}
 		if _, has := e.routers[cname]; has {
+			LogError("controlName:" + cname + " alreay registed")
 			panic("controlName:" + cname + " alreay registed")
 		}
 
@@ -192,7 +192,7 @@ func (e *EWeb) Register(cs ...Controller) {
 		}
 
 		for _, r := range c.GetRouter() {
-			fmt.Println("router>>", cname, r.Path)
+			LogInfo("router>> %s %s", cname, r.Path)
 			comstr := `([^/^\s.]+)`
 			x := regexp.MustCompile(fmt.Sprintf("/:%s", comstr))
 			params := x.FindAllString(r.Path, -1)
@@ -227,10 +227,10 @@ func (e *EWeb) NotFound(ctx *Context) {
 }
 
 func (e *EWeb) Run(addr string) {
-	fmt.Println("---> run at " + addr)
+	Log("---> run at %s", addr)
 	err := http.ListenAndServe(addr, e)
 	if err != nil {
-		fmt.Println(err.Error())
+		LogError("%v", err)
 	}
 }
 

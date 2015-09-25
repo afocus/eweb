@@ -1,10 +1,13 @@
 package eweb
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"text/template"
+	"time"
 )
 
 type Context struct {
@@ -14,6 +17,10 @@ type Context struct {
 	Data        map[string]interface{}
 	Ins         *EWeb
 	ControlName string
+}
+
+func (ctx *Context) HTMLEscapeString(src string) string {
+	return template.HTMLEscapeString(src)
 }
 
 // 获取url router 绑定的类似:xxx中xxx的具体值
@@ -116,4 +123,97 @@ func (ctx *Context) Json(code int, data interface{}) {
 func (ctx *Context) Xml(code int, data interface{}) {
 	err := ctx.Ins.render.Xml(ctx.Writer, code, data)
 	panic(err)
+}
+
+func (ctx *Context) GetCookie(key string) string {
+	ck, err := ctx.Request.Cookie(key)
+	if err != nil {
+		return ""
+	}
+	return ck.Value
+}
+
+//setcookie come from beego
+var cookieNameSanitizer = strings.NewReplacer("\n", "-", "\r", "-")
+var cookieValueSanitizer = strings.NewReplacer("\n", " ", "\r", " ", ";", " ")
+
+func sanitizeName(n string) string {
+	return cookieNameSanitizer.Replace(n)
+}
+func sanitizeValue(v string) string {
+	return cookieValueSanitizer.Replace(v)
+}
+func (ctx *Context) SetCookie(name string, value string, others ...interface{}) {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "%s=%s", sanitizeName(name), sanitizeValue(value))
+
+	//fix cookie not work in IE
+	if len(others) > 0 {
+		switch v := others[0].(type) {
+		case int:
+			if v > 0 {
+				fmt.Fprintf(&b, "; Expires=%s; Max-Age=%d", time.Now().Add(time.Duration(v)*time.Second).UTC().Format(time.RFC1123), v)
+			} else if v < 0 {
+				fmt.Fprintf(&b, "; Max-Age=0")
+			}
+		case int64:
+			if v > 0 {
+				fmt.Fprintf(&b, "; Expires=%s; Max-Age=%d", time.Now().Add(time.Duration(v)*time.Second).UTC().Format(time.RFC1123), v)
+			} else if v < 0 {
+				fmt.Fprintf(&b, "; Max-Age=0")
+			}
+		case int32:
+			if v > 0 {
+				fmt.Fprintf(&b, "; Expires=%s; Max-Age=%d", time.Now().Add(time.Duration(v)*time.Second).UTC().Format(time.RFC1123), v)
+			} else if v < 0 {
+				fmt.Fprintf(&b, "; Max-Age=0")
+			}
+		}
+	}
+
+	// the settings below
+	// Path, Domain, Secure, HttpOnly
+	// can use nil skip set
+
+	// default "/"
+	if len(others) > 1 {
+		if v, ok := others[1].(string); ok && len(v) > 0 {
+			fmt.Fprintf(&b, "; Path=%s", sanitizeValue(v))
+		}
+	} else {
+		fmt.Fprintf(&b, "; Path=%s", "/")
+	}
+	// default empty
+	if len(others) > 2 {
+		if v, ok := others[2].(string); ok && len(v) > 0 {
+			fmt.Fprintf(&b, "; Domain=%s", sanitizeValue(v))
+		}
+	}
+	// default empty
+	if len(others) > 3 {
+		var secure bool
+		switch v := others[3].(type) {
+		case bool:
+			secure = v
+		default:
+			if others[3] != nil {
+				secure = true
+			}
+		}
+		if secure {
+			fmt.Fprintf(&b, "; Secure")
+		}
+	}
+	// default false. for session cookie default true
+	httponly := false
+	if len(others) > 4 {
+		if v, ok := others[4].(bool); ok && v {
+			// HttpOnly = true
+			httponly = true
+		}
+	}
+	if httponly {
+		fmt.Fprintf(&b, "; HttpOnly")
+	}
+	ctx.Writer.Header().Add("Set-Cookie", b.String())
 }

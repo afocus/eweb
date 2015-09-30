@@ -39,7 +39,7 @@ func init() {
 }
 
 func logOut(level int, format string, v ...interface{}) {
-	if _logger.Level >= level {
+	if level >= _logger.Level {
 		info := fmt.Sprintf(format, v...)
 		var prex string
 		switch level {

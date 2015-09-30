@@ -126,6 +126,10 @@ func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(500)
 			LogError("%v", err)
 			fmt.Fprintln(w, fmt.Sprintf("<pre style='color:red;font-weight:bold'>%v</pre>", err))
+			flusher, ok := w.(http.Flusher)
+			if ok {
+				flusher.Flush()
+			}
 		}
 	}()
 
@@ -232,6 +236,13 @@ func (e *EWeb) Run(addr string) {
 	if err != nil {
 		LogError("%v", err)
 	}
+}
+
+func (e *EWeb) GetController(controlname string) Controller {
+	if comap, has := e.routers[controlname]; has {
+		return comap.Control
+	}
+	return nil
 }
 
 func (e *EWeb) SetDebug(enable bool) {

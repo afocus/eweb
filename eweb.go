@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"reflect"
 	"regexp"
+	"runtime/debug"
 	"strings"
 )
 
@@ -37,7 +38,7 @@ type EWeb struct {
 	debug  bool
 }
 
-func New(enableDebug bool) *EWeb {
+func New() *EWeb {
 	web := new(EWeb)
 	web.routers = make(map[string]routerMaps, 0)
 	web.StaticDir = map[string]string{
@@ -45,13 +46,14 @@ func New(enableDebug bool) *EWeb {
 	}
 	web.basePath = "/"
 	web.DefaultControlName = "index"
+	enableDebug := GetConfig("default").GetBool("app", "debug", true)
 	web.render = render.New("views/", enableDebug)
 	web.debug = enableDebug
 	return web
 }
 
 func GetVersion() string {
-	return "0.0.4"
+	return "0.0.5"
 }
 func (e *EWeb) RegisterTplFuncs(funcs template.FuncMap) {
 	e.render.RegisterFuncs(funcs)
@@ -116,23 +118,44 @@ func (e *EWeb) parseUrl(url string) (controlName, path string) {
 	return
 }
 
+func panicCatch(e *EWeb, w http.ResponseWriter) {
+	if err := recover(); err != nil {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.WriteHeader(500)
+		LogError("%v", err)
+		tpl := `
+		<html>
+		<head><meta charset="utf-8"/><title>服务器错误</title>
+		<style>
+		*{font-family:"微软雅黑";line-height:1.8}
+		pre{background:#fefefe;padding:20px;margin-top:20px;color:#888;font-size:12px}
+		h1{text-align:center;font-size:148px;line-height:1;padding-top:60px;margin:20px}
+		h1>small{display:block;font-size:32px;color:#444}
+		</style>
+		</head>
+		<body><h1>500<small>内部服务器错误</small></h1>
+		<p style="font-weight:bold;font-size:14px;color:red;background:#ffe;padding:20px;">错误信息: %v</p>
+		%s
+		</body>
+		</html>
+		`
+		stackInfo := ""
+		if e.debug {
+			stackstr := string(debug.Stack())
+			stackInfo = fmt.Sprintf(`<pre>%s</pre>`, stackstr)
+		}
+		fmt.Fprintln(w, fmt.Sprintf(tpl, err, stackInfo))
+		flusher, ok := w.(http.Flusher)
+		if ok {
+			flusher.Flush()
+		}
+	}
+}
+
 //http handler
 func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//捕获异常进行崩溃恢复
-	defer func() {
-		if err := recover(); err != nil {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.WriteHeader(500)
-			LogError("%v", err)
-			fmt.Fprintln(w, fmt.Sprintf("<pre style='color:red;font-weight:bold'>%v</pre>", err))
-			flusher, ok := w.(http.Flusher)
-			if ok {
-				flusher.Flush()
-			}
-		}
-	}()
-
+	defer panicCatch(e, w)
 	if e.staticFile(r.URL.Path, w, r) {
 		return
 	}
@@ -222,17 +245,33 @@ func (e *EWeb) SetNotFound(handler ActionFunc) {
 }
 
 func (e *EWeb) NotFound(ctx *Context) {
+	ctx.Writer.WriteHeader(404)
+	ctx.Writer.Header().Set("Content-type", render.CONTENTTYPE_HTML)
 	if e.notFoundHandlFunc != nil {
-		ctx.Writer.WriteHeader(404)
 		e.notFoundHandlFunc(ctx)
 	} else {
-		http.NotFound(ctx.Writer, ctx.Request)
+		tpl := `
+		<html>
+		<head><meta charset="utf-8"/><title>未找到网页</title>
+		<style>
+		*{font-family:"微软雅黑";line-height:1.8}
+		h1{text-align:center;font-size:148px;line-height:1;padding-top:60px;margin:20px}
+		h1>small{display:block;font-size:32px;color:#444}
+		</style>
+		</head>
+		<body><h1>404<small>未找到该网页 file not found</small></h1>
+		</body>
+		</html>
+		`
+		ctx.Writer.Write([]byte(tpl))
 	}
 }
 
-func (e *EWeb) Run(addr string) {
-	Log("---> run at %s", addr)
-	err := http.ListenAndServe(addr, e)
+func (e *EWeb) Run() {
+	cfg := GetConfig("default")
+	address := cfg.GetString("app", "address", ":8088")
+	Log("---> run at %s", address)
+	err := http.ListenAndServe(address, e)
 	if err != nil {
 		LogError("%v", err)
 	}

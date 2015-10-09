@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-var _logger *logger
+var globalLogger *logger
 
 type logger struct {
 	Logger      *log.Logger
@@ -23,23 +23,21 @@ const (
 )
 
 func init() {
+	config := GetConfig("default")
 	file, err := os.Create("log/app.log")
 	if err != nil {
 		log.Fatalln("fail to create app.log file!")
 	}
-	_logger = &logger{
+	globalLogger = &logger{
 		Logger: log.New(file, "", log.LstdFlags|log.Llongfile),
 	}
-	_logger.Logger.SetFlags(log.LstdFlags)
-	config := MustGetConfig("default")
-	if config != nil {
-		_logger.Level = config.GetInt("logLevel")
-		_logger.ShowConsole = config.GetBool("logShowConsole")
-	}
+	globalLogger.Logger.SetFlags(log.LstdFlags)
+	globalLogger.Level = config.GetInt("log", "logLevel", LOG)
+	globalLogger.ShowConsole = config.GetBool("log", "logShowConsole", true)
 }
 
 func logOut(level int, format string, v ...interface{}) {
-	if level >= _logger.Level {
+	if level >= globalLogger.Level {
 		info := fmt.Sprintf(format, v...)
 		var prex string
 		switch level {
@@ -55,10 +53,10 @@ func logOut(level int, format string, v ...interface{}) {
 			prex = "LOG"
 		}
 		prex = " [" + prex + "] "
-		if _logger.ShowConsole {
+		if globalLogger.ShowConsole {
 			log.Println(prex, info)
 		}
-		_logger.Logger.Println(prex, info)
+		globalLogger.Logger.Println(prex, info)
 	}
 }
 

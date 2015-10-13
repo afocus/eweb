@@ -152,6 +152,18 @@ func panicCatch(e *EWeb, w http.ResponseWriter) {
 	}
 }
 
+func doAction(control Controller, fun ActionFunc, ctx *Context) {
+	if before, ok := control.(ControlBeforer); ok {
+		if !before.Before(ctx) {
+			return
+		}
+	}
+	fun(ctx)
+	if after, ok := control.(ControlAfter); ok {
+		after.After(ctx)
+	}
+}
+
 //http handler
 func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//捕获异常进行崩溃恢复
@@ -173,10 +185,7 @@ func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if co, has := comap.List[uripath]; has {
 			//普通匹配
 			if co.Method == r.Method || co.Method == "*" {
-				if comap.Control.Before(ctx) {
-					co.Action(ctx)
-				}
-				comap.Control.After(ctx)
+				doAction(comap.Control, co.Action, ctx)
 				return
 			}
 		} else {
@@ -188,10 +197,7 @@ func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						for k, v := range v.Params {
 							ctx.Params[v] = p[k+1]
 						}
-						if comap.Control.Before(ctx) {
-							v.Action(ctx)
-						}
-						comap.Control.After(ctx)
+						doAction(comap.Control, v.Action, ctx)
 						return
 					}
 				}
@@ -289,7 +295,7 @@ func (e *EWeb) SetDebug(enable bool) {
 }
 
 type D struct {
-	Message string
-	Status  int
-	Data    interface{}
+	Message string      `json:"message"`
+	Code    int         `json:"code"`
+	Data    interface{} `json:"data"`
 }

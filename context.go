@@ -49,11 +49,15 @@ func (ctx *Context) QueryInt(key ...string) int {
 func (ctx *Context) PostForm(key ...string) string {
 	ctx.Request.ParseMultipartForm(32 << 20) //最大post数据的大小 32mb
 	if values := ctx.Request.PostForm[key[0]]; len(values) > 0 {
-		return values[0]
+		if len(values[0]) > 0 {
+			return values[0]
+		}
 	}
 	if ctx.Request.MultipartForm != nil && ctx.Request.MultipartForm.File != nil {
 		if values := ctx.Request.MultipartForm.Value[key[0]]; len(values) > 0 {
-			return values[0]
+			if len(values[0]) > 0 {
+				return values[0]
+			}
 		}
 	}
 	if len(key) == 1 {

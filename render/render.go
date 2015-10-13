@@ -5,7 +5,10 @@ import (
 	"encoding/xml"
 	"errors"
 	"html/template"
+	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 )
 
 const (
@@ -18,13 +21,12 @@ const (
 func New(path string, isdebug bool) *Render {
 	return &Render{
 		basePath: path,
-		list:     make(map[string]*template.Template, 0),
 		debug:    isdebug,
 	}
 }
 
 type Render struct {
-	list     map[string]*template.Template
+	t        *template.Template
 	basePath string
 	debug    bool
 }
@@ -47,19 +49,52 @@ func (Render) Render(w http.ResponseWriter, typestr string, code int, data []byt
 	return err
 }
 
+func getFileList(path string) []string {
+	var files = make([]string, 0)
+	err := filepath.Walk(path, func(path string, f os.FileInfo, err error) error {
+		if f == nil {
+			return err
+		}
+		if f.IsDir() {
+			return nil
+		}
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	return files
+}
+
+func getTemplateIns(root string) *template.Template {
+	tplFils := getFileList(root)
+	t := template.New("views").Funcs(teamplateFuncs)
+	for _, path := range tplFils {
+		b, err := ioutil.ReadFile(path)
+		if err != nil {
+			panic(err)
+		}
+		//如果是windows下编译的 还"\"转为"/"
+		name := string([]byte(filepath.ToSlash(path))[6:])
+		t, err = t.New(name).Parse(string(b))
+		println("parse tpl>>", name)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return t
+}
+
 func (this *Render) Html(w http.ResponseWriter, code int, tplname string,
 	data interface{}, controlname string) error {
 	var t *template.Template
 	if this.debug {
-		t = template.Must(template.New(controlname).Funcs(teamplateFuncs).
-			ParseGlob(this.basePath + "/" + controlname + "/*"))
+		t = getTemplateIns(this.basePath)
 	} else {
-		//这部分应该加锁 稍后处理
-		var has bool
-		if t, has = this.list[controlname]; !has {
-			t = template.Must(template.New(controlname).Funcs(teamplateFuncs).
-				ParseGlob(this.basePath + "/" + controlname + "/*"))
-			this.list[controlname] = t
+		if this.t == nil {
+			this.t = getTemplateIns(this.basePath)
+			t = this.t
 		}
 	}
 	w.WriteHeader(code)

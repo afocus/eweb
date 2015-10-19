@@ -24,6 +24,8 @@ type routerMaps struct {
 }
 
 type EWeb struct {
+	//分组
+	groupRouter map[string][]string
 	//路由map
 	routers map[string]routerMaps
 	//静态文件路径
@@ -47,7 +49,7 @@ func New() *EWeb {
 	web.basePath = "/"
 	web.DefaultControlName = "index"
 	enableDebug := GetConfig("default").GetBool("app", "debug", true)
-	web.render = render.New("views/", enableDebug)
+	web.render = render.New("templates/", enableDebug)
 	web.debug = enableDebug
 	return web
 }
@@ -118,10 +120,11 @@ func (e *EWeb) parseUrl(url string) (controlName, path string) {
 	return
 }
 
-func panicCatch(e *EWeb, w http.ResponseWriter) {
+func panicCatch(e *EWeb, ctx *Context) {
 	if err := recover(); err != nil {
+		w := ctx.Writer
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		LogError("%v", err)
 		tpl := `
 		<html>
@@ -164,14 +167,37 @@ func doAction(control Controller, fun ActionFunc, ctx *Context) {
 	}
 }
 
+func (e *EWeb) routerToAction(ctx *Context, comap routerMaps, uripath, method string) bool {
+	if co, has := comap.List[uripath]; has {
+		//普通匹配
+		if co.Method == method || co.Method == "*" {
+			doAction(comap.Control, co.Action, ctx)
+			return true
+		}
+	} else {
+		//正则匹配
+		for path, v := range comap.List {
+			if v.Params != nil && (v.Method == method || v.Method == "*") {
+				reg := regexp.MustCompile(path)
+				if p := reg.FindStringSubmatch(uripath); p != nil {
+					for k, v := range v.Params {
+						ctx.Params[v] = p[k+1]
+					}
+					doAction(comap.Control, v.Action, ctx)
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 //http handler
 func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	//捕获异常进行崩溃恢复
-	defer panicCatch(e, w)
 	if e.staticFile(r.URL.Path, w, r) {
 		return
 	}
-	LogInfo("request [%s] %s\r\n", r.Method, r.URL.Path)
+	LogInfo("request [%s] %s", r.Method, r.URL.Path)
 	cname, uripath := e.parseUrl(r.URL.Path)
 	ctx := &Context{
 		Writer:      w,
@@ -181,44 +207,38 @@ func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Ins:         e,
 		ControlName: cname,
 	}
+	//捕获异常进行崩溃恢复
+	defer panicCatch(e, ctx)
+	fmt.Println("--", cname, "--")
 	if comap, has := e.routers[cname]; has {
-		if co, has := comap.List[uripath]; has {
-			//普通匹配
-			if co.Method == r.Method || co.Method == "*" {
-				doAction(comap.Control, co.Action, ctx)
-				return
-			}
-		} else {
-			//正则匹配
-			for path, v := range comap.List {
-				if v.Params != nil && (v.Method == r.Method || v.Method == "*") {
-					reg := regexp.MustCompile(path)
-					if p := reg.FindStringSubmatch(uripath); p != nil {
-						for k, v := range v.Params {
-							ctx.Params[v] = p[k+1]
-						}
-						doAction(comap.Control, v.Action, ctx)
-						return
-					}
-				}
-			}
+		if e.routerToAction(ctx, comap, uripath, r.Method) {
+			return
+		}
+	}
+	cname2, uripath2 := e.parseUrl(uripath)
+	if comap, has := e.routers[cname+"/"+cname2]; has {
+		if e.routerToAction(ctx, comap, uripath2, r.Method) {
+			return
 		}
 	}
 	e.NotFound(ctx)
 }
 
-func (e *EWeb) Register(cs ...Controller) {
+func (e *EWeb) Register(groupname string, cs ...Controller) {
+	groupname = strings.Split(groupname, "/")[1]
 	for _, c := range cs {
 		cname := strings.ToLower(c.GetName())
 		if cname == "" {
 			type_ := reflect.TypeOf(c)
 			cname = strings.ToLower(type_.Elem().Name())
 		}
+		if groupname != "" {
+			cname = groupname + "/" + cname
+		}
 		if _, has := e.routers[cname]; has {
 			LogError("controlName:" + cname + " alreay registed")
 			panic("controlName:" + cname + " alreay registed")
 		}
-
 		e.routers[cname] = routerMaps{
 			Control: c,
 			List:    make(map[string]routerMapStruct, 0),
@@ -251,7 +271,7 @@ func (e *EWeb) SetNotFound(handler ActionFunc) {
 }
 
 func (e *EWeb) NotFound(ctx *Context) {
-	ctx.Writer.WriteHeader(404)
+	ctx.Writer.WriteHeader(http.StatusNotFound)
 	ctx.Writer.Header().Set("Content-type", render.CONTENTTYPE_HTML)
 	if e.notFoundHandlFunc != nil {
 		e.notFoundHandlFunc(ctx)

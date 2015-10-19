@@ -111,22 +111,34 @@ func (ctx *Context) IsUpload() bool {
 
 func (ctx *Context) String(code int, format string, a ...interface{}) {
 	err := ctx.Ins.render.Render(ctx.Writer, "", code, []byte(fmt.Sprintf(format, a...)))
-	panic(err)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (ctx *Context) Html(code int, tplname string, data interface{}) {
 	err := ctx.Ins.render.Html(ctx.Writer, code, tplname, data, ctx.ControlName)
-	panic(err)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (ctx *Context) HtmlData(tplname string) {
+	ctx.Html(http.StatusOK, tplname, &ctx.Data)
 }
 
 func (ctx *Context) Json(code int, data interface{}) {
 	err := ctx.Ins.render.Json(ctx.Writer, code, data)
-	panic(err)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (ctx *Context) Xml(code int, data interface{}) {
 	err := ctx.Ins.render.Xml(ctx.Writer, code, data)
-	panic(err)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (ctx *Context) GetCookie(key string) string {

@@ -76,7 +76,7 @@ func getTemplateIns(root string) *template.Template {
 			panic(err)
 		}
 		//如果是windows下编译的 还"\"转为"/"
-		name := string([]byte(filepath.ToSlash(path))[6:])
+		name := string([]byte(filepath.ToSlash(path))[len(root):])
 		t, err = t.New(name).Parse(string(b))
 		println("parse tpl>>", name)
 		if err != nil {
@@ -97,9 +97,11 @@ func (this *Render) Html(w http.ResponseWriter, code int, tplname string,
 			t = this.t
 		}
 	}
-	w.WriteHeader(code)
+
 	w.Header().Set("Content-type", CONTENTTYPE_HTML)
-	return t.ExecuteTemplate(w, tplname, data)
+	w.WriteHeader(code)
+	err := t.ExecuteTemplate(w, tplname, data)
+	return err
 }
 
 func (this *Render) Json(w http.ResponseWriter, code int, data interface{}) error {

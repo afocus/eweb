@@ -78,7 +78,6 @@ func getTemplateIns(root string) *template.Template {
 		//如果是windows下编译的 还"\"转为"/"
 		name := string([]byte(filepath.ToSlash(path))[len(root):])
 		t, err = t.New(name).Parse(string(b))
-		println("parse tpl>>", name)
 		if err != nil {
 			panic(err)
 		}

@@ -209,7 +209,6 @@ func (e *EWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	//捕获异常进行崩溃恢复
 	defer panicCatch(e, ctx)
-	fmt.Println("--", cname, "--")
 	if comap, has := e.routers[cname]; has {
 		if e.routerToAction(ctx, comap, uripath, r.Method) {
 			return

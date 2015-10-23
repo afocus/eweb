@@ -29,7 +29,7 @@ func init() {
 		log.Fatalln("fail to create app.log file!")
 	}
 	globalLogger = &logger{
-		Logger: log.New(file, "", log.LstdFlags|log.Llongfile),
+		Logger: log.New(file, "", log.Ldate|log.Lmicroseconds|log.Llongfile),
 	}
 	globalLogger.Logger.SetFlags(log.LstdFlags)
 	globalLogger.Level = config.GetInt("log", "logLevel", LOG)

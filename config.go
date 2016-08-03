@@ -84,8 +84,9 @@ func (this *configSections) GetInt(sec, key string, def int) int {
 	if !ok {
 		return def
 	}
-	i, err := strconv.ParseInt(v, 10, 32)
+	i, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
+		println(err.Error())
 		return def
 	}
 	return int(i)

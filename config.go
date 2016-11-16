@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-type configSection map[string]string
+type configSection map[string][]string
 
 type configSections map[string]configSection
 
@@ -57,7 +57,16 @@ func GetConfig(name string) *configSections {
 		if key == "" || val == "" {
 			continue
 		}
-		sections[sec][key] = val
+		if sections[sec][key] == nil {
+			sections[sec][key] = make([]string, 0)
+		}
+		// 判断是否是数组
+		if strings.HasSuffix(key, "[]") {
+			sections[sec][key] = append(sections[sec][key], val)
+		} else {
+			sections[sec][key] = []string{val}
+		}
+
 	}
 	configList[name] = &sections
 	return configList[name]
@@ -72,6 +81,19 @@ func (this *configSections) GetString(sec, key, def string) string {
 	if !ok {
 		return def
 	}
+	return v[0]
+
+}
+
+func (this *configSections) GetSliceString(sec, key string) []string {
+	m, ok := (*this)[sec]
+	if !ok {
+		return []string{}
+	}
+	v, ok := m[key]
+	if !ok {
+		return []string{}
+	}
 	return v
 }
 
@@ -84,7 +106,8 @@ func (this *configSections) GetInt(sec, key string, def int) int {
 	if !ok {
 		return def
 	}
-	i, err := strconv.ParseInt(v, 10, 64)
+	a := v[0]
+	i, err := strconv.ParseInt(a, 10, 64)
 	if err != nil {
 		println(err.Error())
 		return def
@@ -101,5 +124,5 @@ func (this *configSections) GetBool(sec, key string, def bool) bool {
 	if !ok {
 		return def
 	}
-	return v != "0"
+	return v[0] != "0"
 }
